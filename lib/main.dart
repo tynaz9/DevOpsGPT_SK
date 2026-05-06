@@ -1,23 +1,28 @@
 import 'package:device_preview/device_preview.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth/login_screen.dart';
 
-final themeNotifier =
-    ValueNotifier<ThemeMode>(ThemeMode.dark);
+final themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.dark);
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-    ),
+
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(statusBarColor: Colors.transparent),
+  );
+
   runApp(
     DevicePreview(
-      // Set to false before releasing to production
       enabled: true,
       builder: (context) => const MyApp(),
     ),
@@ -36,15 +41,10 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           title: 'DevOpsGPT',
           themeMode: mode,
-
-          // Required for DevicePreview
-          useInheritedMediaQuery: true,
           locale: DevicePreview.locale(context),
           builder: DevicePreview.appBuilder,
-
           darkTheme: _buildDarkTheme(),
           theme: _buildLightTheme(),
-
           initialRoute: '/login',
           routes: {
             '/login': (_) => const LoginScreen(),
@@ -59,8 +59,7 @@ class MyApp extends StatelessWidget {
     return ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: const Color(0xFF060B18),
-      textTheme: GoogleFonts.interTextTheme(
-          ThemeData.dark().textTheme),
+      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       colorScheme: const ColorScheme.dark(
         primary: Color(0xFF00D4FF),
         secondary: Color(0xFF7C3AED),
@@ -74,8 +73,7 @@ class MyApp extends StatelessWidget {
           fontSize: 20,
           fontWeight: FontWeight.bold,
         ),
-        iconTheme: const IconThemeData(
-            color: Color(0xFF00D4FF)),
+        iconTheme: const IconThemeData(color: Color(0xFF00D4FF)),
       ),
       cardColor: const Color(0xFF0D1424),
     );
@@ -85,8 +83,7 @@ class MyApp extends StatelessWidget {
     return ThemeData(
       brightness: Brightness.light,
       scaffoldBackgroundColor: const Color(0xFFF0F4FF),
-      textTheme: GoogleFonts.interTextTheme(
-          ThemeData.light().textTheme),
+      textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
       colorScheme: const ColorScheme.light(
         primary: Color(0xFF00A8CC),
         secondary: Color(0xFF6D28D9),
@@ -100,8 +97,7 @@ class MyApp extends StatelessWidget {
           fontSize: 20,
           fontWeight: FontWeight.bold,
         ),
-        iconTheme: const IconThemeData(
-            color: Color(0xFF00A8CC)),
+        iconTheme: const IconThemeData(color: Color(0xFF00A8CC)),
       ),
       cardColor: const Color(0xFFFFFFFF),
     );

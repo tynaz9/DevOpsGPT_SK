@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
@@ -18,28 +19,25 @@ class _LoginScreenState extends State<LoginScreen>
   int _tabIndex = 0;
 
   // Sign In controllers
-  final _accountIdController = TextEditingController();
+  final _signInEmailController    = TextEditingController();
   final _signInPasswordController = TextEditingController();
 
   // Sign Up controllers
-  final _usernameController  = TextEditingController();
-  final _emailController     = TextEditingController();
+  final _usernameController       = TextEditingController();
+  final _emailController          = TextEditingController();
   final _signUpPasswordController = TextEditingController();
 
-  bool _isLoading       = false;
-  bool _showSignInPass  = false;
-  bool _showSignUpPass  = false;
-  String _error         = '';
-  String _success       = '';
+  bool _isLoading      = false;
+  bool _showSignInPass = false;
+  bool _showSignUpPass = false;
+  String _error        = '';
+  String _success      = '';
 
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
-  // ── Hardcoded credentials ─────────────────────
-  static const String accountId = '541172290899';
-  static const String password  = 'DevOpsGPT@2026';
-  // ─────────────────────────────────────────────
+  final _auth = FirebaseAuth.instance;
 
   @override
   void initState() {
@@ -61,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _animController.dispose();
-    _accountIdController.dispose();
+    _signInEmailController.dispose();
     _signInPasswordController.dispose();
     _usernameController.dispose();
     _emailController.dispose();
@@ -77,33 +75,106 @@ class _LoginScreenState extends State<LoginScreen>
     });
   }
 
+  // ── Convert Firebase error codes to friendly messages ──
+  String _friendlyError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'user-not-found':
+        return 'No account found with this email.';
+      case 'wrong-password':
+        return 'Incorrect password. Please try again.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'email-already-in-use':
+        return 'An account already exists with this email.';
+      case 'weak-password':
+        return 'Password must be at least 6 characters.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      case 'network-request-failed':
+        return 'Network error. Check your connection.';
+      case 'invalid-credential':
+        return 'Invalid email or password.';
+      default:
+        return e.message ?? 'An error occurred. Please try again.';
+    }
+  }
+
   // ── Sign In ───────────────────────────────────
   Future<void> _login() async {
-    if (_accountIdController.text.trim().isEmpty ||
-        _signInPasswordController.text.trim().isEmpty) {
+    final email = _signInEmailController.text.trim();
+    final pass  = _signInPasswordController.text.trim();
+
+    if (email.isEmpty || pass.isEmpty) {
       setState(() => _error = 'Please fill in all fields');
       return;
     }
-    setState(() { _isLoading = true; _error = ''; });
-    await Future.delayed(const Duration(milliseconds: 1500));
 
-    if (_accountIdController.text.trim() == accountId &&
-        _signInPasswordController.text.trim() == password) {
-      if (mounted) Navigator.pushReplacementNamed(context, '/home');
-    } else {
+    setState(() { _isLoading = true; _error = ''; });
+
+    try {
+      await _auth.signInWithEmailAndPassword(
+          email: email, password: pass);
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } on FirebaseAuthException catch (e) {
       setState(() {
         _isLoading = false;
-        _error = 'Invalid Account ID or Password';
+        _error = _friendlyError(e);
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = 'An unexpected error occurred.';
       });
     }
   }
 
-  // ── Sign Up with Email (alternative flow) ────
+  // ── Sign Up ───────────────────────────────────
+  Future<void> _signUp() async {
+    final username = _usernameController.text.trim();
+    final email    = _emailController.text.trim();
+    final pass     = _signUpPasswordController.text.trim();
+
+    if (username.isEmpty || email.isEmpty || pass.isEmpty) {
+      setState(() => _error = 'Please fill in all fields');
+      return;
+    }
+
+    setState(() { _isLoading = true; _error = ''; _success = ''; });
+
+    try {
+      final credential = await _auth.createUserWithEmailAndPassword(
+          email: email, password: pass);
+      // Save display name
+      await credential.user?.updateDisplayName(username);
+      setState(() {
+        _isLoading = false;
+        _success   = 'Account created! You can now sign in.';
+        _usernameController.clear();
+        _emailController.clear();
+        _signUpPasswordController.clear();
+      });
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = _friendlyError(e);
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = 'An unexpected error occurred.';
+      });
+    }
+  }
+
+  // ── Sign Up with Email (bottom sheet) ─────────
   void _signUpWithEmail() {
-    final emailCtrl = TextEditingController();
-    final passCtrl  = TextEditingController();
-    bool showPass   = false;
+    final emailCtrl   = TextEditingController();
+    final passCtrl    = TextEditingController();
+    bool showPass     = false;
     String sheetError = '';
+    bool sheetLoading = false;
 
     showModalBottomSheet(
       context: context,
@@ -114,10 +185,9 @@ class _LoginScreenState extends State<LoginScreen>
           final textPrimary   = AppTheme.textPrimary(ctx);
           final textMuted     = AppTheme.textMuted(ctx);
           final textSecondary = AppTheme.textSecondary(ctx);
-          final sheetBg = Theme.of(ctx).brightness == Brightness.dark
-              ? const Color(0xFF0D1424)
-              : Colors.white;
-          final borderTop = Theme.of(ctx).brightness == Brightness.dark
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          final sheetBg  = isDark ? const Color(0xFF0D1424) : Colors.white;
+          final borderTop = isDark
               ? const Color(0x1AFFFFFF)
               : const Color(0x20000000);
 
@@ -129,8 +199,7 @@ class _LoginScreenState extends State<LoginScreen>
                 color: sheetBg,
                 borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(28)),
-                border: Border(
-                    top: BorderSide(color: borderTop)),
+                border: Border(top: BorderSide(color: borderTop)),
               ),
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
               child: Column(
@@ -138,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
-                  // Handle bar
+                  // Handle
                   Center(
                     child: Container(
                       width: 40, height: 4,
@@ -181,60 +250,43 @@ class _LoginScreenState extends State<LoginScreen>
 
                   const SizedBox(height: 24),
 
-                  // Email field
+                  // Email
                   Text('Email Address',
                       style: TextStyle(
                           color: textSecondary, fontSize: 13)),
                   const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppTheme.glassWhite(ctx),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppTheme.glassBorder(ctx)),
-                    ),
+                  _inputContainer(ctx,
                     child: TextField(
                       controller: emailCtrl,
                       keyboardType: TextInputType.emailAddress,
-                      style: TextStyle(
-                          color: textPrimary, fontSize: 14),
+                      style: TextStyle(color: textPrimary, fontSize: 14),
                       decoration: InputDecoration(
                         hintText: 'john@example.com',
-                        hintStyle: TextStyle(
-                            color: textMuted, fontSize: 14),
+                        hintStyle: TextStyle(color: textMuted, fontSize: 14),
                         prefixIcon: Icon(Icons.email_rounded,
                             color: AppColors.accent, size: 20),
                         border: InputBorder.none,
-                        contentPadding:
-                            const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
                       ),
                     ),
                   ),
 
                   const SizedBox(height: 16),
 
-                  // Password field
+                  // Password
                   Text('Password',
                       style: TextStyle(
                           color: textSecondary, fontSize: 13)),
                   const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppTheme.glassWhite(ctx),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppTheme.glassBorder(ctx)),
-                    ),
+                  _inputContainer(ctx,
                     child: TextField(
                       controller: passCtrl,
                       obscureText: !showPass,
-                      style: TextStyle(
-                          color: textPrimary, fontSize: 14),
+                      style: TextStyle(color: textPrimary, fontSize: 14),
                       decoration: InputDecoration(
                         hintText: '••••••••••',
-                        hintStyle: TextStyle(
-                            color: textMuted, fontSize: 14),
+                        hintStyle: TextStyle(color: textMuted, fontSize: 14),
                         prefixIcon: Icon(Icons.lock_rounded,
                             color: AppColors.accent, size: 20),
                         suffixIcon: IconButton(
@@ -248,41 +300,22 @@ class _LoginScreenState extends State<LoginScreen>
                               setSheetState(() => showPass = !showPass),
                         ),
                         border: InputBorder.none,
-                        contentPadding:
-                            const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
                       ),
                     ),
                   ),
 
-                  // Error
                   if (sheetError.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.criticalGlow,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.error_rounded,
-                            color: AppColors.critical, size: 16),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(sheetError,
-                              style: const TextStyle(
-                                  color: AppColors.critical,
-                                  fontSize: 13)),
-                        ),
-                      ]),
-                    ),
+                    _errorBanner(sheetError),
                   ],
 
                   const SizedBox(height: 24),
 
                   // Submit
                   GestureDetector(
-                    onTap: () async {
+                    onTap: sheetLoading ? null : () async {
                       final email = emailCtrl.text.trim();
                       final pass  = passCtrl.text.trim();
                       if (email.isEmpty || pass.isEmpty) {
@@ -290,53 +323,62 @@ class _LoginScreenState extends State<LoginScreen>
                             sheetError = 'Please fill in all fields');
                         return;
                       }
-                      if (!email.contains('@') ||
-                          !email.contains('.')) {
-                        setSheetState(() =>
-                            sheetError = 'Enter a valid email address');
-                        return;
-                      }
-                      if (pass.length < 6) {
-                        setSheetState(() => sheetError =
-                            'Password must be at least 6 characters');
-                        return;
-                      }
-                      setSheetState(() => sheetError = '');
-                      await Future.delayed(
-                          const Duration(milliseconds: 1200));
-                      if (ctx.mounted) {
-                        Navigator.pop(ctx);
-                        setState(() {
-                          _success =
-                              'Account created! You can now sign in.';
-                          _tabIndex = 0;
+                      setSheetState(() {
+                        sheetError   = '';
+                        sheetLoading = true;
+                      });
+                      try {
+                        await _auth.createUserWithEmailAndPassword(
+                            email: email, password: pass);
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            _success  = 'Account created! You can now sign in.';
+                            _tabIndex = 0;
+                          });
+                        }
+                      } on FirebaseAuthException catch (e) {
+                        setSheetState(() {
+                          sheetLoading = false;
+                          sheetError   = _friendlyError(e);
                         });
                       }
                     },
                     child: Container(
                       width: double.infinity,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                            colors: AppColors.primaryGradient),
+                        gradient: sheetLoading
+                            ? null
+                            : const LinearGradient(
+                                colors: AppColors.primaryGradient),
+                        color: sheetLoading
+                            ? AppTheme.cardBorder(ctx)
+                            : null,
                         borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.accent
-                                .withValues(alpha: 0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                        boxShadow: sheetLoading
+                            ? null
+                            : [
+                                BoxShadow(
+                                  color: AppColors.accent
+                                      .withValues(alpha: 0.3),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                       ),
                       child: Center(
-                        child: Text('Create Account',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            )),
+                        child: sheetLoading
+                            ? const SizedBox(
+                                width: 20, height: 20,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2))
+                            : Text('Create Account',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                )),
                       ),
                     ),
                   ),
@@ -349,34 +391,16 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // ── Sign Up ───────────────────────────────────
-  Future<void> _signUp() async {
-    final username = _usernameController.text.trim();
-    final email    = _emailController.text.trim();
-    final pass     = _signUpPasswordController.text.trim();
-
-    if (username.isEmpty || email.isEmpty || pass.isEmpty) {
-      setState(() => _error = 'Please fill in all fields');
-      return;
-    }
-    if (!email.contains('@') || !email.contains('.')) {
-      setState(() => _error = 'Enter a valid email address');
-      return;
-    }
-    if (pass.length < 6) {
-      setState(() => _error = 'Password must be at least 6 characters');
-      return;
-    }
-
-    setState(() { _isLoading = true; _error = ''; _success = ''; });
-    await Future.delayed(const Duration(milliseconds: 1500));
-    setState(() {
-      _isLoading = false;
-      _success   = 'Account created! You can now sign in.';
-      _usernameController.clear();
-      _emailController.clear();
-      _signUpPasswordController.clear();
-    });
+  // ── Helper: input container ───────────────────
+  Widget _inputContainer(BuildContext ctx, {required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.glassWhite(ctx),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.glassBorder(ctx)),
+      ),
+      child: child,
+    );
   }
 
   @override
@@ -399,7 +423,7 @@ class _LoginScreenState extends State<LoginScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
 
-                      // ── Logo ──────────────────────────
+                      // Logo
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
@@ -437,7 +461,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                       const SizedBox(height: 32),
 
-                      // ── Tab switcher ──────────────────
+                      // Tab switcher
                       GlassCard(
                         padding: const EdgeInsets.all(4),
                         borderRadius: 16,
@@ -449,14 +473,12 @@ class _LoginScreenState extends State<LoginScreen>
 
                       const SizedBox(height: 16),
 
-                      // ── Form card ─────────────────────
+                      // Form card
                       GlassCard(
                         child: AnimatedSwitcher(
-                          duration:
-                              const Duration(milliseconds: 300),
+                          duration: const Duration(milliseconds: 300),
                           transitionBuilder: (child, anim) =>
-                              FadeTransition(
-                                  opacity: anim, child: child),
+                              FadeTransition(opacity: anim, child: child),
                           child: _tabIndex == 0
                               ? _buildSignInForm(context)
                               : _buildSignUpForm(context),
@@ -465,19 +487,16 @@ class _LoginScreenState extends State<LoginScreen>
 
                       const SizedBox(height: 24),
 
-                      // ── Security note ─────────────────
+                      // Security note
                       Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.center,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const Icon(Icons.lock_rounded,
-                              color: AppColors.success,
-                              size: 14),
+                              color: AppColors.success, size: 14),
                           const SizedBox(width: 6),
-                          Text('Secured with AWS IAM',
+                          Text('Secured with Firebase Auth',
                               style: GoogleFonts.inter(
-                                  color: textMuted,
-                                  fontSize: 12)),
+                                  color: textMuted, fontSize: 12)),
                         ],
                       ),
                     ],
@@ -546,11 +565,11 @@ class _LoginScreenState extends State<LoginScreen>
 
         _buildField(
           context: context,
-          controller: _accountIdController,
-          label: 'AWS Account ID',
-          hint: '123456789012',
-          icon: Icons.cloud_rounded,
-          keyboardType: TextInputType.number,
+          controller: _signInEmailController,
+          label: 'Email Address',
+          hint: 'john@example.com',
+          icon: Icons.email_rounded,
+          keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 16),
         _buildField(
@@ -565,9 +584,13 @@ class _LoginScreenState extends State<LoginScreen>
               setState(() => _showSignInPass = !_showSignInPass),
         ),
 
-        if (_error.isNotEmpty) ...[
+        if (_error.isNotEmpty && _tabIndex == 0) ...[
           const SizedBox(height: 12),
           _errorBanner(_error),
+        ],
+        if (_success.isNotEmpty && _tabIndex == 0) ...[
+          const SizedBox(height: 12),
+          _successBanner(_success),
         ],
 
         const SizedBox(height: 24),
@@ -578,9 +601,26 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         const SizedBox(height: 16),
         Center(
-          child: Text('Use your AWS Account ID as username',
-              style: GoogleFonts.inter(
-                  color: textMuted, fontSize: 12)),
+          child: GestureDetector(
+            onTap: () => _switchTab(1),
+            child: RichText(
+              text: TextSpan(
+                text: "Don't have an account? ",
+                style: GoogleFonts.inter(
+                    color: textMuted, fontSize: 13),
+                children: [
+                  TextSpan(
+                    text: 'Sign Up',
+                    style: GoogleFonts.inter(
+                      color: AppColors.accent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -635,11 +675,11 @@ class _LoginScreenState extends State<LoginScreen>
               setState(() => _showSignUpPass = !_showSignUpPass),
         ),
 
-        if (_error.isNotEmpty) ...[
+        if (_error.isNotEmpty && _tabIndex == 1) ...[
           const SizedBox(height: 12),
           _errorBanner(_error),
         ],
-        if (_success.isNotEmpty) ...[
+        if (_success.isNotEmpty && _tabIndex == 1) ...[
           const SizedBox(height: 12),
           _successBanner(_success),
         ],
@@ -652,7 +692,7 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         const SizedBox(height: 16),
 
-        // ── Divider ───────────────────────────
+        // Divider
         Row(children: [
           Expanded(
               child: Divider(
@@ -673,7 +713,7 @@ class _LoginScreenState extends State<LoginScreen>
 
         const SizedBox(height: 16),
 
-        // ── Sign up with Email button ─────────
+        // Sign up with Email button
         GestureDetector(
           onTap: _isLoading ? null : _signUpWithEmail,
           child: Container(
@@ -745,16 +785,13 @@ class _LoginScreenState extends State<LoginScreen>
               ? null
               : const LinearGradient(
                   colors: AppColors.primaryGradient),
-          color: _isLoading
-              ? AppTheme.cardBorder(context)
-              : null,
+          color: _isLoading ? AppTheme.cardBorder(context) : null,
           borderRadius: BorderRadius.circular(14),
           boxShadow: _isLoading
               ? null
               : [
                   BoxShadow(
-                    color: AppColors.accent
-                        .withValues(alpha: 0.3),
+                    color: AppColors.accent.withValues(alpha: 0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 4),
                   ),
@@ -763,11 +800,9 @@ class _LoginScreenState extends State<LoginScreen>
         child: Center(
           child: _isLoading
               ? const SizedBox(
-                  width: 20,
-                  height: 20,
+                  width: 20, height: 20,
                   child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2),
-                )
+                      color: Colors.white, strokeWidth: 2))
               : Text(label,
                   style: GoogleFonts.inter(
                     color: Colors.white,
@@ -838,8 +873,7 @@ class _LoginScreenState extends State<LoginScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: TextStyle(
-                color: textSecondary, fontSize: 13)),
+            style: TextStyle(color: textSecondary, fontSize: 13)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -857,8 +891,7 @@ class _LoginScreenState extends State<LoginScreen>
                 _tabIndex == 0 ? _login() : _signUp(),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: TextStyle(
-                  color: textMuted, fontSize: 14),
+              hintStyle: TextStyle(color: textMuted, fontSize: 14),
               prefixIcon: Icon(icon,
                   color: AppColors.accent, size: 20),
               suffixIcon: isPassword
@@ -867,8 +900,7 @@ class _LoginScreenState extends State<LoginScreen>
                         showPassword
                             ? Icons.visibility_off_rounded
                             : Icons.visibility_rounded,
-                        color: textMuted,
-                        size: 20,
+                        color: textMuted, size: 20,
                       ),
                       onPressed: onTogglePassword,
                     )
