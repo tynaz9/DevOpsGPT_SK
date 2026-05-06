@@ -8,23 +8,35 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() =>
-      _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
+
+  // ── Tab: 0 = Sign In, 1 = Sign Up ────────────
+  int _tabIndex = 0;
+
+  // Sign In controllers
   final _accountIdController = TextEditingController();
-  final _passwordController  = TextEditingController();
-  bool _isLoading     = false;
-  bool _showPassword  = false;
-  String _error       = '';
+  final _signInPasswordController = TextEditingController();
+
+  // Sign Up controllers
+  final _usernameController  = TextEditingController();
+  final _emailController     = TextEditingController();
+  final _signUpPasswordController = TextEditingController();
+
+  bool _isLoading       = false;
+  bool _showSignInPass  = false;
+  bool _showSignUpPass  = false;
+  String _error         = '';
+  String _success       = '';
 
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
-  // ── Set your credentials here ────────────────
+  // ── Hardcoded credentials ─────────────────────
   static const String accountId = '541172290899';
   static const String password  = 'DevOpsGPT@2026';
   // ─────────────────────────────────────────────
@@ -37,16 +49,12 @@ class _LoginScreenState extends State<LoginScreen>
       duration: const Duration(milliseconds: 800),
     );
     _fadeAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    );
+        parent: _animController, curve: Curves.easeOut);
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.3),
       end: Offset.zero,
     ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    ));
+        parent: _animController, curve: Curves.easeOut));
     _animController.forward();
   }
 
@@ -54,36 +62,321 @@ class _LoginScreenState extends State<LoginScreen>
   void dispose() {
     _animController.dispose();
     _accountIdController.dispose();
-    _passwordController.dispose();
+    _signInPasswordController.dispose();
+    _usernameController.dispose();
+    _emailController.dispose();
+    _signUpPasswordController.dispose();
     super.dispose();
   }
 
+  void _switchTab(int index) {
+    setState(() {
+      _tabIndex = index;
+      _error    = '';
+      _success  = '';
+    });
+  }
+
+  // ── Sign In ───────────────────────────────────
   Future<void> _login() async {
     if (_accountIdController.text.trim().isEmpty ||
-        _passwordController.text.trim().isEmpty) {
-      setState(() =>
-          _error = 'Please fill in all fields');
+        _signInPasswordController.text.trim().isEmpty) {
+      setState(() => _error = 'Please fill in all fields');
       return;
     }
-
     setState(() { _isLoading = true; _error = ''; });
+    await Future.delayed(const Duration(milliseconds: 1500));
 
-    await Future.delayed(
-        const Duration(milliseconds: 1500));
-
-    if (_accountIdController.text.trim() ==
-            accountId &&
-        _passwordController.text.trim() == password) {
-      if (mounted) {
-        Navigator.pushReplacementNamed(
-            context, '/home');
-      }
+    if (_accountIdController.text.trim() == accountId &&
+        _signInPasswordController.text.trim() == password) {
+      if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } else {
       setState(() {
         _isLoading = false;
         _error = 'Invalid Account ID or Password';
       });
     }
+  }
+
+  // ── Sign Up with Email (alternative flow) ────
+  void _signUpWithEmail() {
+    final emailCtrl = TextEditingController();
+    final passCtrl  = TextEditingController();
+    bool showPass   = false;
+    String sheetError = '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final textPrimary   = AppTheme.textPrimary(ctx);
+          final textMuted     = AppTheme.textMuted(ctx);
+          final textSecondary = AppTheme.textSecondary(ctx);
+          final sheetBg = Theme.of(ctx).brightness == Brightness.dark
+              ? const Color(0xFF0D1424)
+              : Colors.white;
+          final borderTop = Theme.of(ctx).brightness == Brightness.dark
+              ? const Color(0x1AFFFFFF)
+              : const Color(0x20000000);
+
+          return Padding(
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              decoration: BoxDecoration(
+                color: sheetBg,
+                borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28)),
+                border: Border(
+                    top: BorderSide(color: borderTop)),
+              ),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(
+                        color: AppTheme.textMuted(ctx)
+                            .withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Header
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                            colors: AppColors.primaryGradient),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.email_rounded,
+                          color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Sign up with Email',
+                            style: GoogleFonts.inter(
+                                color: textPrimary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold)),
+                        Text('Enter your email and password',
+                            style: GoogleFonts.inter(
+                                color: textMuted, fontSize: 12)),
+                      ],
+                    ),
+                  ]),
+
+                  const SizedBox(height: 24),
+
+                  // Email field
+                  Text('Email Address',
+                      style: TextStyle(
+                          color: textSecondary, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.glassWhite(ctx),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: AppTheme.glassBorder(ctx)),
+                    ),
+                    child: TextField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      style: TextStyle(
+                          color: textPrimary, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'john@example.com',
+                        hintStyle: TextStyle(
+                            color: textMuted, fontSize: 14),
+                        prefixIcon: Icon(Icons.email_rounded,
+                            color: AppColors.accent, size: 20),
+                        border: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Password field
+                  Text('Password',
+                      style: TextStyle(
+                          color: textSecondary, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.glassWhite(ctx),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: AppTheme.glassBorder(ctx)),
+                    ),
+                    child: TextField(
+                      controller: passCtrl,
+                      obscureText: !showPass,
+                      style: TextStyle(
+                          color: textPrimary, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: '••••••••••',
+                        hintStyle: TextStyle(
+                            color: textMuted, fontSize: 14),
+                        prefixIcon: Icon(Icons.lock_rounded,
+                            color: AppColors.accent, size: 20),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            showPass
+                                ? Icons.visibility_off_rounded
+                                : Icons.visibility_rounded,
+                            color: textMuted, size: 20,
+                          ),
+                          onPressed: () =>
+                              setSheetState(() => showPass = !showPass),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                  ),
+
+                  // Error
+                  if (sheetError.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.criticalGlow,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.error_rounded,
+                            color: AppColors.critical, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(sheetError,
+                              style: const TextStyle(
+                                  color: AppColors.critical,
+                                  fontSize: 13)),
+                        ),
+                      ]),
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
+
+                  // Submit
+                  GestureDetector(
+                    onTap: () async {
+                      final email = emailCtrl.text.trim();
+                      final pass  = passCtrl.text.trim();
+                      if (email.isEmpty || pass.isEmpty) {
+                        setSheetState(() =>
+                            sheetError = 'Please fill in all fields');
+                        return;
+                      }
+                      if (!email.contains('@') ||
+                          !email.contains('.')) {
+                        setSheetState(() =>
+                            sheetError = 'Enter a valid email address');
+                        return;
+                      }
+                      if (pass.length < 6) {
+                        setSheetState(() => sheetError =
+                            'Password must be at least 6 characters');
+                        return;
+                      }
+                      setSheetState(() => sheetError = '');
+                      await Future.delayed(
+                          const Duration(milliseconds: 1200));
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                        setState(() {
+                          _success =
+                              'Account created! You can now sign in.';
+                          _tabIndex = 0;
+                        });
+                      }
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                            colors: AppColors.primaryGradient),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.accent
+                                .withValues(alpha: 0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text('Create Account',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            )),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Sign Up ───────────────────────────────────
+  Future<void> _signUp() async {
+    final username = _usernameController.text.trim();
+    final email    = _emailController.text.trim();
+    final pass     = _signUpPasswordController.text.trim();
+
+    if (username.isEmpty || email.isEmpty || pass.isEmpty) {
+      setState(() => _error = 'Please fill in all fields');
+      return;
+    }
+    if (!email.contains('@') || !email.contains('.')) {
+      setState(() => _error = 'Enter a valid email address');
+      return;
+    }
+    if (pass.length < 6) {
+      setState(() => _error = 'Password must be at least 6 characters');
+      return;
+    }
+
+    setState(() { _isLoading = true; _error = ''; _success = ''; });
+    await Future.delayed(const Duration(milliseconds: 1500));
+    setState(() {
+      _isLoading = false;
+      _success   = 'Account created! You can now sign in.';
+      _usernameController.clear();
+      _emailController.clear();
+      _signUpPasswordController.clear();
+    });
   }
 
   @override
@@ -103,19 +396,16 @@ class _LoginScreenState extends State<LoginScreen>
                 child: SlideTransition(
                   position: _slideAnimation,
                   child: Column(
-                    mainAxisAlignment:
-                        MainAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
 
-                      // Logo
+                      // ── Logo ──────────────────────────
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: AppColors.primaryGradient,
-                          ),
-                          borderRadius:
-                              BorderRadius.circular(24),
+                              colors: AppColors.primaryGradient),
+                          borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
                               color: AppColors.accent
@@ -132,181 +422,50 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
-                      // Title
-                      Text(
-                        'DevOpsGPT',
-                        style: GoogleFonts.inter(
-                          color: textPrimary,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -1,
-                        ),
-                      ),
-                      Text(
-                        'AI Cloud Operations Platform',
-                        style: GoogleFonts.inter(
-                          color: textMuted,
-                          fontSize: 14,
-                        ),
-                      ),
+                      Text('DevOpsGPT',
+                          style: GoogleFonts.inter(
+                            color: textPrimary,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -1,
+                          )),
+                      Text('AI Cloud Operations Platform',
+                          style: GoogleFonts.inter(
+                              color: textMuted, fontSize: 14)),
 
-                      const SizedBox(height: 48),
+                      const SizedBox(height: 32),
 
-                      // Login Card
+                      // ── Tab switcher ──────────────────
                       GlassCard(
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
+                        padding: const EdgeInsets.all(4),
+                        borderRadius: 16,
+                        child: Row(children: [
+                          _tabButton('Sign In', 0),
+                          _tabButton('Sign Up', 1),
+                        ]),
+                      ),
 
-                            Text('Sign In',
-                                style: GoogleFonts.inter(
-                                  color: textPrimary,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                )),
-                            Text(
-                                'Enter your AWS credentials',
-                                style: GoogleFonts.inter(
-                                  color: textMuted,
-                                  fontSize: 13,
-                                )),
+                      const SizedBox(height: 16),
 
-                            const SizedBox(height: 24),
-
-                            // Account ID field
-                            _buildField(
-                              context: context,
-                              controller: _accountIdController,
-                              label: 'AWS Account ID',
-                              hint: '123456789012',
-                              icon: Icons.cloud_rounded,
-                              keyboardType:
-                                  TextInputType.number,
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Password field
-                            _buildField(
-                              context: context,
-                              controller: _passwordController,
-                              label: 'Password',
-                              hint: '••••••••••',
-                              icon: Icons.lock_rounded,
-                              isPassword: true,
-                              showPassword: _showPassword,
-                              onTogglePassword: () =>
-                                  setState(() =>
-                                      _showPassword =
-                                          !_showPassword),
-                            ),
-
-                            // Error message
-                            if (_error.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              Container(
-                                padding:
-                                    const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: AppColors.criticalGlow,
-                                  borderRadius:
-                                      BorderRadius.circular(10),
-                                ),
-                                child: Row(children: [
-                                  const Icon(
-                                      Icons.error_rounded,
-                                      color: AppColors.critical,
-                                      size: 16),
-                                  const SizedBox(width: 8),
-                                  Text(_error,
-                                      style: const TextStyle(
-                                        color: AppColors.critical,
-                                        fontSize: 13,
-                                      )),
-                                ]),
-                              ),
-                            ],
-
-                            const SizedBox(height: 24),
-
-                            // Login Button
-                            GestureDetector(
-                              onTap: _isLoading ? null : _login,
-                              child: Container(
-                                width: double.infinity,
-                                padding:
-                                    const EdgeInsets.symmetric(
-                                        vertical: 16),
-                                decoration: BoxDecoration(
-                                  gradient: _isLoading
-                                      ? null
-                                      : const LinearGradient(
-                                          colors: AppColors
-                                              .primaryGradient,
-                                        ),
-                                  color: _isLoading
-                                      ? AppTheme.cardBorder(context)
-                                      : null,
-                                  borderRadius:
-                                      BorderRadius.circular(14),
-                                  boxShadow: _isLoading
-                                      ? null
-                                      : [
-                                          BoxShadow(
-                                            color: AppColors.accent
-                                                .withValues(alpha: 0.3),
-                                            blurRadius: 20,
-                                            offset:
-                                                const Offset(0, 4),
-                                          ),
-                                        ],
-                                ),
-                                child: Center(
-                                  child: _isLoading
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child:
-                                              CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : Text(
-                                          'Sign In',
-                                          style: GoogleFonts.inter(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight:
-                                                FontWeight.bold,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Hint
-                            Center(
-                              child: Text(
-                                'Use your AWS Account ID as username',
-                                style: GoogleFonts.inter(
-                                  color: textMuted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
+                      // ── Form card ─────────────────────
+                      GlassCard(
+                        child: AnimatedSwitcher(
+                          duration:
+                              const Duration(milliseconds: 300),
+                          transitionBuilder: (child, anim) =>
+                              FadeTransition(
+                                  opacity: anim, child: child),
+                          child: _tabIndex == 0
+                              ? _buildSignInForm(context)
+                              : _buildSignUpForm(context),
                         ),
                       ),
 
                       const SizedBox(height: 24),
 
-                      // Security note
+                      // ── Security note ─────────────────
                       Row(
                         mainAxisAlignment:
                             MainAxisAlignment.center,
@@ -315,13 +474,10 @@ class _LoginScreenState extends State<LoginScreen>
                               color: AppColors.success,
                               size: 14),
                           const SizedBox(width: 6),
-                          Text(
-                            'Secured with AWS IAM',
-                            style: GoogleFonts.inter(
-                              color: textMuted,
-                              fontSize: 12,
-                            ),
-                          ),
+                          Text('Secured with AWS IAM',
+                              style: GoogleFonts.inter(
+                                  color: textMuted,
+                                  fontSize: 12)),
                         ],
                       ),
                     ],
@@ -335,6 +491,334 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  // ── Tab button ────────────────────────────────
+  Widget _tabButton(String label, int index) {
+    final isActive = _tabIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _switchTab(index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            gradient: isActive
+                ? const LinearGradient(
+                    colors: AppColors.primaryGradient)
+                : null,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(label,
+                style: GoogleFonts.inter(
+                  color: isActive
+                      ? Colors.white
+                      : AppTheme.textMuted(context),
+                  fontSize: 14,
+                  fontWeight: isActive
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                )),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Sign In form ──────────────────────────────
+  Widget _buildSignInForm(BuildContext context) {
+    final textPrimary = AppTheme.textPrimary(context);
+    final textMuted   = AppTheme.textMuted(context);
+
+    return Column(
+      key: const ValueKey('signin'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Welcome back',
+            style: GoogleFonts.inter(
+                color: textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.bold)),
+        Text('Sign in to your account',
+            style: GoogleFonts.inter(
+                color: textMuted, fontSize: 13)),
+
+        const SizedBox(height: 24),
+
+        _buildField(
+          context: context,
+          controller: _accountIdController,
+          label: 'AWS Account ID',
+          hint: '123456789012',
+          icon: Icons.cloud_rounded,
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 16),
+        _buildField(
+          context: context,
+          controller: _signInPasswordController,
+          label: 'Password',
+          hint: '••••••••••',
+          icon: Icons.lock_rounded,
+          isPassword: true,
+          showPassword: _showSignInPass,
+          onTogglePassword: () =>
+              setState(() => _showSignInPass = !_showSignInPass),
+        ),
+
+        if (_error.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _errorBanner(_error),
+        ],
+
+        const SizedBox(height: 24),
+        _submitButton(
+          context: context,
+          label: 'Sign In',
+          onTap: _login,
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: Text('Use your AWS Account ID as username',
+              style: GoogleFonts.inter(
+                  color: textMuted, fontSize: 12)),
+        ),
+      ],
+    );
+  }
+
+  // ── Sign Up form ──────────────────────────────
+  Widget _buildSignUpForm(BuildContext context) {
+    final textPrimary = AppTheme.textPrimary(context);
+    final textMuted   = AppTheme.textMuted(context);
+
+    return Column(
+      key: const ValueKey('signup'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Create account',
+            style: GoogleFonts.inter(
+                color: textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.bold)),
+        Text('Fill in your details to get started',
+            style: GoogleFonts.inter(
+                color: textMuted, fontSize: 13)),
+
+        const SizedBox(height: 24),
+
+        _buildField(
+          context: context,
+          controller: _usernameController,
+          label: 'Username',
+          hint: 'johndoe',
+          icon: Icons.person_rounded,
+        ),
+        const SizedBox(height: 16),
+        _buildField(
+          context: context,
+          controller: _emailController,
+          label: 'Email Address',
+          hint: 'john@example.com',
+          icon: Icons.email_rounded,
+          keyboardType: TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 16),
+        _buildField(
+          context: context,
+          controller: _signUpPasswordController,
+          label: 'Password',
+          hint: '••••••••••',
+          icon: Icons.lock_rounded,
+          isPassword: true,
+          showPassword: _showSignUpPass,
+          onTogglePassword: () =>
+              setState(() => _showSignUpPass = !_showSignUpPass),
+        ),
+
+        if (_error.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _errorBanner(_error),
+        ],
+        if (_success.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _successBanner(_success),
+        ],
+
+        const SizedBox(height: 24),
+        _submitButton(
+          context: context,
+          label: 'Create Account',
+          onTap: _signUp,
+        ),
+        const SizedBox(height: 16),
+
+        // ── Divider ───────────────────────────
+        Row(children: [
+          Expanded(
+              child: Divider(
+                  color: AppTheme.glassBorder(context),
+                  thickness: 1)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text('or',
+                style: TextStyle(
+                    color: AppTheme.textMuted(context),
+                    fontSize: 13)),
+          ),
+          Expanded(
+              child: Divider(
+                  color: AppTheme.glassBorder(context),
+                  thickness: 1)),
+        ]),
+
+        const SizedBox(height: 16),
+
+        // ── Sign up with Email button ─────────
+        GestureDetector(
+          onTap: _isLoading ? null : _signUpWithEmail,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: AppTheme.glassWhite(context),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.email_rounded,
+                    color: AppColors.accent, size: 20),
+                const SizedBox(width: 10),
+                Text('Sign up with Email',
+                    style: GoogleFonts.inter(
+                      color: AppColors.accent,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    )),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+        Center(
+          child: GestureDetector(
+            onTap: () => _switchTab(0),
+            child: RichText(
+              text: TextSpan(
+                text: 'Already have an account? ',
+                style: GoogleFonts.inter(
+                    color: textMuted, fontSize: 13),
+                children: [
+                  TextSpan(
+                    text: 'Sign In',
+                    style: GoogleFonts.inter(
+                      color: AppColors.accent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Shared widgets ────────────────────────────
+  Widget _submitButton({
+    required BuildContext context,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: _isLoading ? null : onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          gradient: _isLoading
+              ? null
+              : const LinearGradient(
+                  colors: AppColors.primaryGradient),
+          color: _isLoading
+              ? AppTheme.cardBorder(context)
+              : null,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: _isLoading
+              ? null
+              : [
+                  BoxShadow(
+                    color: AppColors.accent
+                        .withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+        ),
+        child: Center(
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2),
+                )
+              : Text(label,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  )),
+        ),
+      ),
+    );
+  }
+
+  Widget _errorBanner(String message) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.criticalGlow,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(children: [
+        const Icon(Icons.error_rounded,
+            color: AppColors.critical, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(message,
+              style: const TextStyle(
+                  color: AppColors.critical, fontSize: 13)),
+        ),
+      ]),
+    );
+  }
+
+  Widget _successBanner(String message) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.successGlow,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(children: [
+        const Icon(Icons.check_circle_rounded,
+            color: AppColors.success, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(message,
+              style: const TextStyle(
+                  color: AppColors.success, fontSize: 13)),
+        ),
+      ]),
+    );
+  }
+
   Widget _buildField({
     required BuildContext context,
     required TextEditingController controller,
@@ -342,12 +826,12 @@ class _LoginScreenState extends State<LoginScreen>
     required String hint,
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
-    bool isPassword         = false,
-    bool showPassword       = false,
+    bool isPassword            = false,
+    bool showPassword          = false,
     VoidCallback? onTogglePassword,
   }) {
-    final textColor    = AppTheme.textPrimary(context);
-    final textMuted    = AppTheme.textMuted(context);
+    final textColor     = AppTheme.textPrimary(context);
+    final textMuted     = AppTheme.textMuted(context);
     final textSecondary = AppTheme.textSecondary(context);
 
     return Column(
@@ -355,8 +839,7 @@ class _LoginScreenState extends State<LoginScreen>
       children: [
         Text(label,
             style: TextStyle(
-                color: textSecondary,
-                fontSize: 13)),
+                color: textSecondary, fontSize: 13)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -369,17 +852,15 @@ class _LoginScreenState extends State<LoginScreen>
             controller: controller,
             obscureText: isPassword && !showPassword,
             keyboardType: keyboardType,
-            style: TextStyle(
-                color: textColor, fontSize: 14),
-            onSubmitted: (_) => _login(),
+            style: TextStyle(color: textColor, fontSize: 14),
+            onSubmitted: (_) =>
+                _tabIndex == 0 ? _login() : _signUp(),
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(
-                  color: textMuted,
-                  fontSize: 14),
-              prefixIcon:
-                  Icon(icon, color: AppColors.accent,
-                      size: 20),
+                  color: textMuted, fontSize: 14),
+              prefixIcon: Icon(icon,
+                  color: AppColors.accent, size: 20),
               suffixIcon: isPassword
                   ? IconButton(
                       icon: Icon(
@@ -393,9 +874,8 @@ class _LoginScreenState extends State<LoginScreen>
                     )
                   : null,
               border: InputBorder.none,
-              contentPadding:
-                  const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 14),
             ),
           ),
         ),

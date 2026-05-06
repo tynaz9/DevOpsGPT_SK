@@ -1,3 +1,4 @@
+import 'package:device_preview/device_preview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,7 +15,13 @@ void main() {
       statusBarColor: Colors.transparent,
     ),
   );
-  runApp(const MyApp());
+  runApp(
+    DevicePreview(
+      // Set to false before releasing to production
+      enabled: true,
+      builder: (context) => const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -29,6 +36,11 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           title: 'DevOpsGPT',
           themeMode: mode,
+
+          // Required for DevicePreview
+          useInheritedMediaQuery: true,
+          locale: DevicePreview.locale(context),
+          builder: DevicePreview.appBuilder,
 
           darkTheme: _buildDarkTheme(),
           theme: _buildLightTheme(),
