@@ -96,6 +96,30 @@ class _AIChatScreenState extends State<AIChatScreen>
 
   // ── Mic (popup only — inline listener removed) ─
 
+  // ── Strip markdown for clean TTS ─────────────
+  String _stripMarkdown(String text) {
+    return text
+        .replaceAllMapped(RegExp(r'\*\*(.+?)\*\*'), (m) => m[1] ?? '')
+        .replaceAllMapped(RegExp(r'\*(.+?)\*'),     (m) => m[1] ?? '')
+        .replaceAllMapped(RegExp(r'`(.+?)`'),        (m) => m[1] ?? '')
+        .replaceAllMapped(RegExp(r'\[(.+?)\]\(.+?\)'), (m) => m[1] ?? '')
+        .replaceAll(RegExp(r'#+\s?'), '')
+        .replaceAll(RegExp(r'^\s*[-*]\s', multiLine: true), '')
+        // Remove AWS server IDs like i-0abc123def456789
+        .replaceAll(RegExp(r'\bi-[0-9a-f]{8,17}\b'), '')
+        // Remove other common AWS resource IDs
+        .replaceAll(RegExp(r'\b[a-z]+-[0-9a-f]{8,}\b'), '')
+        .replaceAll('•', '')
+        .replaceAll('`', '')
+        .replaceAll('*', '')
+        .replaceAll('#', '')
+        // Clean up extra spaces/colons left after ID removal
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .replaceAll(RegExp(r':\s*,'), ',')
+        .replaceAll(RegExp(r':\s*\.'), '.')
+        .trim();
+  }
+
   // ── TTS toggle ────────────────────────────────
   Future<void> _toggleSpeak(String messageId, String text) async {
     if (_speakingMessageId == messageId) {
@@ -105,14 +129,7 @@ class _AIChatScreenState extends State<AIChatScreen>
       await _tts.stop();
       setState(() => _speakingMessageId = messageId);
       // Strip markdown for cleaner speech
-      final plainText = text
-          .replaceAll(RegExp(r'\*\*(.+?)\*\*'), r'$1')
-          .replaceAll(RegExp(r'\*(.+?)\*'), r'$1')
-          .replaceAll(RegExp(r'#+\s'), '')
-          .replaceAll(RegExp(r'`(.+?)`'), r'$1')
-          .replaceAll(RegExp(r'\[(.+?)\]\(.+?\)'), r'$1')
-          .replaceAll('•', '')
-          .trim();
+      final plainText = _stripMarkdown(text);
       await _tts.speak(plainText);
     }
   }
@@ -497,13 +514,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                       popupSpeaking = true;
                     });
                     // Auto-speak the reply
-                    final plain = reply
-                        .replaceAll(RegExp(r'\*\*(.+?)\*\*'), r'$1')
-                        .replaceAll(RegExp(r'\*(.+?)\*'), r'$1')
-                        .replaceAll(RegExp(r'#+\s'), '')
-                        .replaceAll(RegExp(r'`(.+?)`'), r'$1')
-                        .replaceAll('•', '')
-                        .trim();
+                    final plain = _stripMarkdown(reply);
                     await _tts.speak(plain);
                     _tts.setCompletionHandler(() {
                       if (ctx.mounted) {
@@ -528,13 +539,16 @@ class _AIChatScreenState extends State<AIChatScreen>
           return Dialog(
             backgroundColor: Colors.transparent,
             insetPadding: const EdgeInsets.symmetric(
-                horizontal: 24, vertical: 80),
+                horizontal: 24, vertical: 60),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(28),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                 child: Container(
-                  padding: const EdgeInsets.all(24),
+                  // Max height so it never overflows screen
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.78,
+                  ),
                   decoration: BoxDecoration(
                     color: dialogBg,
                     borderRadius: BorderRadius.circular(28),
@@ -546,246 +560,273 @@ class _AIChatScreenState extends State<AIChatScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
 
-                      // ── Header ────────────────
-                      Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                    colors: AppColors.primaryGradient),
-                                borderRadius: BorderRadius.circular(10),
+                      // ── Fixed header ──────────
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                        child: Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                      colors: AppColors.primaryGradient),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.mic_rounded,
+                                    color: Colors.white, size: 18),
                               ),
-                              child: const Icon(Icons.mic_rounded,
-                                  color: Colors.white, size: 18),
+                              const SizedBox(width: 10),
+                              Text('Voice Assistant',
+                                  style: GoogleFonts.inter(
+                                    color: textPrimary,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  )),
+                            ]),
+                            GestureDetector(
+                              onTap: () {
+                                _speech.stop();
+                                _tts.stop();
+                                Navigator.pop(ctx);
+                              },
+                              child: Icon(Icons.close_rounded,
+                                  color: textMuted, size: 22),
                             ),
-                            const SizedBox(width: 10),
-                            Text('Voice Assistant',
-                                style: GoogleFonts.inter(
-                                  color: textPrimary,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                )),
-                          ]),
-                          GestureDetector(
-                            onTap: () {
-                              _speech.stop();
-                              _tts.stop();
-                              Navigator.pop(ctx);
-                            },
-                            child: Icon(Icons.close_rounded,
-                                color: textMuted, size: 22),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
 
-                      const SizedBox(height: 28),
-
-                      // ── Mic orb ───────────────
-                      GestureDetector(
-                        onTap: popupLoading
-                            ? null
-                            : () async {
-                                if (popupListening) {
-                                  await _speech.stop();
-                                  setPopup(() =>
-                                      popupListening = false);
-                                } else {
-                                  await startListening();
-                                }
-                              },
-                        child: AnimatedContainer(
-                          duration:
-                              const Duration(milliseconds: 300),
-                          width: 110,
-                          height: 110,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: popupListening
-                                ? const LinearGradient(
-                                    colors: AppColors.primaryGradient,
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight)
-                                : null,
-                            color: popupListening
-                                ? null
-                                : AppColors.accent
-                                    .withValues(alpha: 0.1),
-                            border: Border.all(
-                              color: popupListening
-                                  ? AppColors.accent
-                                  : AppColors.accent
-                                      .withValues(alpha: 0.3),
-                              width: popupListening ? 3 : 1.5,
+                      // ── Fixed mic orb + status ─
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                        child: Column(
+                          children: [
+                            GestureDetector(
+                              onTap: popupLoading
+                                  ? null
+                                  : () async {
+                                      if (popupListening) {
+                                        await _speech.stop();
+                                        setPopup(() =>
+                                            popupListening = false);
+                                      } else {
+                                        await startListening();
+                                      }
+                                    },
+                              child: AnimatedContainer(
+                                duration:
+                                    const Duration(milliseconds: 300),
+                                width: 110,
+                                height: 110,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: popupListening
+                                      ? const LinearGradient(
+                                          colors: AppColors.primaryGradient,
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight)
+                                      : null,
+                                  color: popupListening
+                                      ? null
+                                      : AppColors.accent
+                                          .withValues(alpha: 0.1),
+                                  border: Border.all(
+                                    color: popupListening
+                                        ? AppColors.accent
+                                        : AppColors.accent
+                                            .withValues(alpha: 0.3),
+                                    width: popupListening ? 3 : 1.5,
+                                  ),
+                                  boxShadow: popupListening
+                                      ? [
+                                          BoxShadow(
+                                            color: AppColors.accent
+                                                .withValues(alpha: 0.4),
+                                            blurRadius: 30,
+                                            spreadRadius: 8,
+                                          )
+                                        ]
+                                      : null,
+                                ),
+                                child: popupLoading
+                                    ? const Center(
+                                        child: SizedBox(
+                                          width: 32, height: 32,
+                                          child: CircularProgressIndicator(
+                                            color: AppColors.accent,
+                                            strokeWidth: 3,
+                                          ),
+                                        ),
+                                      )
+                                    : ScaleTransition(
+                                        scale: popupListening
+                                            ? _pulseAnimation
+                                            : const AlwaysStoppedAnimation(1.0),
+                                        child: Icon(
+                                          popupListening
+                                              ? Icons.mic_rounded
+                                              : Icons.mic_none_rounded,
+                                          color: popupListening
+                                              ? Colors.white
+                                              : AppColors.accent,
+                                          size: 44,
+                                        ),
+                                      ),
+                              ),
                             ),
-                            boxShadow: popupListening
-                                ? [
-                                    BoxShadow(
+                            const SizedBox(height: 16),
+                            Text(
+                              popupLoading
+                                  ? 'AI is thinking…'
+                                  : popupListening
+                                      ? 'Listening… tap to stop'
+                                      : popupReply.isNotEmpty
+                                          ? 'Tap mic to ask again'
+                                          : 'Tap mic to speak',
+                              style: GoogleFonts.inter(
+                                  color: textMuted, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ── Scrollable content ─────
+                      Flexible(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+
+                              // Transcribed text
+                              if (popupText.isNotEmpty) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accent
+                                        .withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
                                       color: AppColors.accent
-                                          .withValues(alpha: 0.4),
-                                      blurRadius: 30,
-                                      spreadRadius: 8,
-                                    )
-                                  ]
-                                : null,
-                          ),
-                          child: popupLoading
-                              ? const Center(
-                                  child: SizedBox(
-                                    width: 32, height: 32,
-                                    child: CircularProgressIndicator(
-                                      color: AppColors.accent,
-                                      strokeWidth: 3,
+                                          .withValues(alpha: 0.2),
                                     ),
                                   ),
-                                )
-                              : ScaleTransition(
-                                  scale: popupListening
-                                      ? _pulseAnimation
-                                      : const AlwaysStoppedAnimation(1.0),
-                                  child: Icon(
-                                    popupListening
-                                        ? Icons.mic_rounded
-                                        : Icons.mic_none_rounded,
-                                    color: popupListening
-                                        ? Colors.white
-                                        : AppColors.accent,
-                                    size: 44,
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(Icons.person_rounded,
+                                          color: AppColors.accent,
+                                          size: 16),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(popupText,
+                                            style: TextStyle(
+                                              color: textPrimary,
+                                              fontSize: 13,
+                                              fontStyle: FontStyle.italic,
+                                            )),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                        ),
-                      ),
+                                const SizedBox(height: 12),
+                              ],
 
-                      const SizedBox(height: 20),
-
-                      // ── Status text ───────────
-                      Text(
-                        popupLoading
-                            ? 'AI is thinking…'
-                            : popupListening
-                                ? 'Listening… tap to stop'
-                                : popupReply.isNotEmpty
-                                    ? 'Tap mic to ask again'
-                                    : 'Tap mic to speak',
-                        style: GoogleFonts.inter(
-                          color: textMuted,
-                          fontSize: 13,
-                        ),
-                      ),
-
-                      // ── Transcribed text ──────
-                      if (popupText.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.accent
-                                .withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.accent
-                                  .withValues(alpha: 0.2),
-                            ),
-                          ),
-                          child: Row(children: [
-                            Icon(Icons.person_rounded,
-                                color: AppColors.accent,
-                                size: 16),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(popupText,
-                                  style: TextStyle(
-                                    color: textPrimary,
-                                    fontSize: 13,
-                                    fontStyle: FontStyle.italic,
-                                  )),
-                            ),
-                          ]),
-                        ),
-                      ],
-
-                      // ── AI reply ──────────────
-                      if (popupReply.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.purple
-                                .withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.purple
-                                  .withValues(alpha: 0.2),
-                            ),
-                          ),
-                          child: Row(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.smart_toy_rounded,
-                                  color: AppColors.purple,
-                                  size: 16),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  popupReply.length > 200
-                                      ? '${popupReply.substring(0, 200)}…'
-                                      : popupReply,
-                                  style: TextStyle(
-                                    color: textPrimary,
-                                    fontSize: 13,
+                              // AI reply — full text, scrollable
+                              if (popupReply.isNotEmpty)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.purple
+                                        .withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: AppColors.purple
+                                          .withValues(alpha: 0.2),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Header row with icon + stop/play
+                                      Row(
+                                        children: [
+                                          Icon(Icons.smart_toy_rounded,
+                                              color: AppColors.purple,
+                                              size: 16),
+                                          const SizedBox(width: 6),
+                                          Text('AI Response',
+                                              style: TextStyle(
+                                                color: AppColors.purple,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                              )),
+                                          const Spacer(),
+                                          // Speaking indicator
+                                          if (popupSpeaking)
+                                            Padding(
+                                              padding: const EdgeInsets.only(right: 6),
+                                              child: SizedBox(
+                                                width: 14, height: 14,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: AppColors.purple,
+                                                ),
+                                              ),
+                                            ),
+                                          GestureDetector(
+                                            onTap: () async {
+                                              if (popupSpeaking) {
+                                                await _tts.stop();
+                                                setPopup(() =>
+                                                    popupSpeaking = false);
+                                              } else {
+                                                setPopup(() =>
+                                                    popupSpeaking = true);
+                                                final plain = _stripMarkdown(popupReply);
+                                                await _tts.speak(plain);
+                                                _tts.setCompletionHandler(() {
+                                                  if (ctx.mounted) {
+                                                    setPopup(() =>
+                                                        popupSpeaking = false);
+                                                  }
+                                                });
+                                              }
+                                            },
+                                            child: Icon(
+                                              popupSpeaking
+                                                  ? Icons.stop_circle_rounded
+                                                  : Icons.volume_up_rounded,
+                                              color: AppColors.purple,
+                                              size: 20,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      // Full reply text — no truncation
+                                      Text(
+                                        popupReply,
+                                        style: TextStyle(
+                                          color: textPrimary,
+                                          fontSize: 13,
+                                          height: 1.5,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-                              // Stop/replay TTS
-                              GestureDetector(
-                                onTap: () async {
-                                  if (popupSpeaking) {
-                                    await _tts.stop();
-                                    setPopup(() =>
-                                        popupSpeaking = false);
-                                  } else {
-                                    setPopup(() =>
-                                        popupSpeaking = true);
-                                    final plain = popupReply
-                                        .replaceAll(
-                                            RegExp(r'\*\*(.+?)\*\*'),
-                                            r'$1')
-                                        .replaceAll(
-                                            RegExp(r'\*(.+?)\*'),
-                                            r'$1')
-                                        .replaceAll(
-                                            RegExp(r'#+\s'), '')
-                                        .replaceAll('•', '')
-                                        .trim();
-                                    await _tts.speak(plain);
-                                    _tts.setCompletionHandler(() {
-                                      if (ctx.mounted) {
-                                        setPopup(() =>
-                                            popupSpeaking = false);
-                                      }
-                                    });
-                                  }
-                                },
-                                child: Icon(
-                                  popupSpeaking
-                                      ? Icons.stop_circle_rounded
-                                      : Icons.volume_up_rounded,
-                                  color: AppColors.purple,
-                                  size: 20,
-                                ),
-                              ),
                             ],
                           ),
                         ),
-                      ],
-
-                      const SizedBox(height: 8),
+                      ),
                     ],
                   ),
                 ),
