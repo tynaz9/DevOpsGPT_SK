@@ -1,5 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
- <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Network -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Microphone for speech_to_text -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Required by speech_to_text on Android -->
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <!-- flutter_tts needs this on some devices -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <application
         android:label="devopsgpt"
         android:name="${applicationName}"

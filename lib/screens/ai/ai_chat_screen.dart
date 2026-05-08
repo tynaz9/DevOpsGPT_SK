@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../core/theme/app_colors.dart';
 import '../../widgets/glass_card.dart';
@@ -64,6 +65,12 @@ class _AIChatScreenState extends State<AIChatScreen>
   }
 
   Future<void> _initSpeech() async {
+    // Request mic permission on Android before initializing
+    final status = await Permission.microphone.request();
+    if (status.isDenied || status.isPermanentlyDenied) {
+      if (mounted) setState(() => _speechEnabled = false);
+      return;
+    }
     _speechEnabled = await _speech.initialize(
       onStatus: (status) {},
       onError:  (error) {},
